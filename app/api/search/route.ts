@@ -1,4 +1,5 @@
 import { parseQuery } from '@util/url';
+import { meta } from '@util/api';
 import CminiApi from "../../../backend/cmini/api";
 import { SearchSchema } from '@backend/cmini/validators';
 
@@ -12,18 +13,12 @@ export async function GET(req) {
         })
     }
 
-    let rows = CminiApi.search(queryObj as any)
-    const { page, limit, corpora } = queryObj
-    const { totalPages, hasMore, cursor } = CminiApi.meta(rows.length, page as number, limit as number)
-    rows = rows.slice(cursor, queryObj?.limit as number)
+    const result = CminiApi.search(queryObj as any)
+    const { rows, cursor, ...metas } = meta(result, queryObj?.page as number, queryObj?.limit as number)
 
     return Response.json({
         data: rows,
         success: true,
-        meta: {
-            hasMore,
-            page,
-            totalPages,
-        }
+        meta: metas
     })
 }

@@ -9,8 +9,35 @@ import asyncio
 from core.keyboard import Layout, Position
 from os import walk
 import json, math, hashlib
+from itertools import chain, repeat, count, islice
+from collections import Counter
 
 RESTRICTED = False
+
+meme_layouts = ['for_viewing_corpus_stats', 'thumb']
+
+def repeat_chain(values, counts):
+    return chain.from_iterable(map(repeat, values, counts))
+
+def unique_combinations_from_value_counts(values, counts, r):
+    n = len(counts)
+    indices = list(islice(repeat_chain(count(), counts), r))
+    if len(indices) < r:
+        return
+    while True:
+        yield tuple(values[i] for i in indices)
+        for i, j in zip(reversed(range(r)), repeat_chain(reversed(range(n)), reversed(counts))):
+            if indices[i] != j:
+                break
+        else:
+            return
+        j = indices[i] + 1
+        for i, j in zip(range(i, r), repeat_chain(count(j), counts[j:])):
+            indices[i] = j
+
+def unique_combinations(iterable, r):
+    values, counts = zip(*Counter(iterable).items())
+    return unique_combinations_from_value_counts(values, counts, r)
 
 def get_filenames(path):
     f = []
@@ -51,6 +78,12 @@ def board_to_num(b):
             return 1
         case _:
             return 0
+
+def finger_to_hand_num(f):
+    if f[0] == 'L':
+        return 0
+    if f[0] == 'R':
+        return 1
 
 def finger_to_num(f):
     match f:
@@ -105,6 +138,93 @@ def record_metric(metric, value):
         metric["min"] = value
     if value > metric["max"]:
         metric["max"] = value
+
+def layout_to_keymap(ll):
+    keymap_left = { 'gram': [], 'gram-horizontal': [], 'gram-vertical': [] }
+    keymap_right = { 'gram': [], 'gram-horizontal': [], 'gram-vertical': [] }
+    lh_all = []
+    rh_all = []
+    lh_grid = []
+    rh_grid = []
+    lh_width = 0
+    rh_width = 0
+    lt_width = 0
+    rt_width = 0
+
+    for key, data in ll.keys.items():
+        finger_num = finger_to_num(data.finger)
+        is_left_thumb = finger_num == 0
+        is_right_thumb = finger_num == 5
+
+        if finger_to_hand_num(data.finger) == 0:
+            lh_all.append(key)
+            diff = data.row + 1 - len(lh_grid)
+            if diff > 0:
+                for i in range(diff):
+                    lh_grid.append([])
+            ref = lh_grid[data.row]
+            ref.append(key)
+            if len(ref) > lh_width:
+                lh_width = len(ref)
+            if is_left_thumb and len(ref) > lt_width:
+                lt_width = len(ref)
+        else:
+            rh_all.append(key)
+            diff = data.row + 1 - len(rh_grid)
+            if diff > 0:
+                for i in range(diff):
+                    rh_grid.append([])
+            ref = rh_grid[data.row]
+            ref.append(key)
+            if len(ref) > rh_width:
+                rh_width = len(ref)
+            if is_right_thumb and len(ref) > rt_width:
+                rt_width = len(ref)
+
+    def get_hand_combinations_adjacent(key_grid, keymap):
+        for i in range(0, len(key_grid)):
+            row = key_grid[i]
+            for j in range(0, len(row)):
+                h_str = row[j]
+                v_str = row[j]
+                h_char_was_none = False
+                v_char_was_none = False
+
+                for k in range(1, 4):
+                    if not h_char_was_none:
+                        h_char = row[j + k] if j + k < len(row) else None
+                        if h_char is not None:
+                            h_str += h_char
+                            keymap['gram-horizontal'].append(h_str)
+                        else:
+                            h_char_was_none = True
+                    
+                    if not v_char_was_none:
+                        column = key_grid[i + k] if i + k < len(key_grid) else None
+                        v_char = column[j] if column is not None and j < len(column) else None
+                        if v_char is not None:
+                            v_str += v_char
+                            keymap['gram-vertical'].append(v_str)
+                        else:
+                            v_char_was_none = True
+                    
+                    if h_char_was_none and v_char_was_none:
+                        break
+
+    def get_hand_combinations(keys, keymap):
+        if len(keys) == 0:
+            return
+        for i in range(1, 5):
+            for tpl in unique_combinations(keys, i):
+                combo = ''.join(tpl)
+                if not combo in keymap['gram']:
+                    keymap['gram'].append(combo)
+
+    get_hand_combinations_adjacent(lh_grid, keymap_left)
+    get_hand_combinations_adjacent(rh_grid, keymap_right)
+    get_hand_combinations(lh_all, keymap_left)
+    get_hand_combinations(rh_all, keymap_right)
+    return keymap_left, keymap_right, lh_width, rh_width, lt_width, rt_width
 
 def layout_to_string(ll, corpora_dirname, likes_data, metrics):
     author = authors.get_name(ll.user)
@@ -263,10 +383,11 @@ stats_db = open('../cmini-api/stats.tmp.csv', 'w')
 names_db = open('../cmini-api/names.tmp.csv', 'w')
 metrics_db = open('../cmini-api/metrics.tmp.csv', 'w')
 heatmap_db = open('../cmini-api/heatmap.tmp.csv', 'w')
+keymap_db = open('../cmini-api/keymap.tmp.csv', 'w')
 
 likes_data = open('likes.json', 'r')
 likes = json.load(likes_data)
-
+global_keymap = {}
 metrics = {
     "alternate": create_metric(),
     "roll-in": create_metric(),
@@ -343,6 +464,9 @@ for layout_filename in get_filenames('layouts'):
         keys=keys,
     )
 
+    if ll.name in meme_layouts:
+        continue
+
     processed = []
     has_stats = False
     stats = []
@@ -361,6 +485,36 @@ for layout_filename in get_filenames('layouts'):
     if not has_stats:
         continue
 
+    if not layout_hash in processed:
+        left_keymap, right_keymap, lh_width, rh_width, lt_width, rt_width = layout_to_keymap(ll)
+
+        if lh_width > 7 or rh_width > 7 or lt_width > 5 or rt_width > 5:
+            continue
+
+        for hand in range(0, 2):
+            is_left_hand = hand == 0
+            keymap = left_keymap if is_left_hand else right_keymap
+
+            for gram_type, keys in keymap.items():
+                for key_combo in keys:
+                    index = ''
+                    if gram_type == 'gram':
+                        index = f'{key_combo}|' if is_left_hand else f'|{key_combo}'
+
+                        if not index in global_keymap:
+                            global_keymap[index] = []
+                        global_keymap[index].append(layout_hash)
+                    else:
+                        if gram_type == 'gram-horizontal':
+                            index = f'h–{key_combo}'
+                        elif gram_type == 'gram-vertical':
+                            index = f'v–{key_combo}'
+
+                        index = f'{index}|' if is_left_hand else f'|{index}'
+                        if not index in global_keymap:
+                            global_keymap[index] = []
+                        global_keymap[index].append(layout_hash)
+
     names_db.write(f'{names_string}\n')
     if not layout_hash in processed:
         layouts_db.write(f'{layout_string}\n')
@@ -374,3 +528,7 @@ for layout_filename in get_filenames('layouts'):
 for key, metric in metrics.items():
     line = f'{key}|{metric["min"]}|{metric["max"]}\n'
     metrics_db.write(line)
+
+for index, hashes in global_keymap.items():
+    line = f'{index}¶{','.join(hashes)}\n'
+    keymap_db.write(line)

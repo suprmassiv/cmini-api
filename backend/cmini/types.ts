@@ -6,6 +6,10 @@ export enum CminiFinger {
     LT, LI, LM, LR, LP, RT, RI, RM, RR, RP
 }
 
+export enum CminiHand {
+    Left, Right
+}
+
 export type CminiKey = {
     column: number
     row: number

@@ -1,4 +1,6 @@
 import fs from 'fs/promises'
+import fss from 'fs'
+import readline from 'readline'
 import path from 'path'
 
 export enum FileType {
@@ -38,18 +40,46 @@ class StringLoader implements FileLoader<string> {
     }
 }
 
-export class CsvLoader implements FileLoader<string[]> {
-    protected loader: StringLoader
-    protected data: string[]
+class StringLoaderSequential implements FileLoader<readline.Interface> {
+    protected iterator: readline.Interface;
+    protected path: string;
+    protected filetype: FileType
+
+    constructor(path: string, filetype: FileType) {
+        this.path = path;
+        this.filetype = filetype;
+    }
+
+    async load() {
+        const fullPath = path.resolve(process.cwd(), this.path)
+        const fileStream = fss.createReadStream(fullPath);
+        this.iterator = readline.createInterface({
+            input: fileStream,
+            crlfDelay: Infinity
+        });
+        return this.iterator
+    }
+
+    get() {
+        return this.iterator
+    }
+
+    type() {
+        return this.filetype
+    }
+}
+
+export class CsvLoader implements FileLoader<readline.Interface> {
+    protected loader: StringLoaderSequential
+    protected data: readline.Interface
 
     constructor(path: string) {
-        this.loader = new StringLoader(path, FileType.Csv)
+        this.loader = new StringLoaderSequential(path, FileType.Csv)
     }
 
     async load() {
         try {
-            const data = await this.loader.load()
-            this.data = data.split('\n')
+            this.data = await this.loader.load()
             return this.data
         } catch {
             return undefined

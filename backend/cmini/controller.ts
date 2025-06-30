@@ -152,19 +152,19 @@ class CminiController {
     })
   }
 
-  getLayoutsByAuthorName(name: string) {
+  getBoardLayoutsByAuthorName(name: string) {
     const id = CminiStore.indexes.author[name]
     if (!id) {
       return []
     }
-    return this.getLayoutsByAuthorId(id)
+    return this.getBoardLayoutsByAuthorId(id)
   }
 
   getMetas(hashes: string[]) {
     return hashes.map(hash => CminiStore.meta.get(hash)).filter(hash => (!!hash))
   }
 
-  getLayoutsByAuthorId(id: string) {
+  getBoardLayoutsByAuthorId(id: string) {
     const boardHashes = CminiStore.authorIdToBoardHashes.get(id) || [];
     return boardHashes.map(boardLayoutHash => {
       const boardLayout = CminiStore.boardLayouts.get(boardLayoutHash)!
@@ -177,6 +177,10 @@ class CminiController {
       }
     })
   }
+
+  getKeymap(key: string) {
+    return CminiStore.keymap.get(key)
+  } 
 }
 
 const instance = new CminiController();

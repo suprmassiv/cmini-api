@@ -10,6 +10,7 @@ export const SearchSchema = z.object({
     board: z.enum(CminiBoardType).optional(),
     minSfb: z.number().gte(0).optional(),
     maxSfb: z.number().lte(10).optional(),
+    keyQuery: z.string().min(2).max(55).optional(),
 
     sortBy: z.enum(['sfb']).optional(),
     sort: z.enum(['asc', 'desc']).optional(),

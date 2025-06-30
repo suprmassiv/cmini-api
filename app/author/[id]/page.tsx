@@ -13,7 +13,7 @@ export default async function Page({ params }: {
     params: Promise<{ id: string }>
 }) {
     const { id } = await params
-    const layouts = CminiController.getLayoutsByAuthorId(id)
+    const layouts = CminiController.getBoardLayoutsByAuthorId(id)
     const name = CminiController.getAuthorName(id)
     return (
         <Stack>

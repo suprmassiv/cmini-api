@@ -9,6 +9,7 @@ class CminiStore {
   meta: Map<string, CminiMeta> = new Map()
   heatmaps: Map<string, CminiHeatmap> = new Map()
   metrics: Map<string, CminiMetric> = new Map()
+  keymap: Map<string, string[]> = new Map()
   corpora: string[] = []
 
   indexes: { [key: string]: { [key: string]: string } } = {
@@ -21,16 +22,42 @@ class CminiStore {
 
   async load() {
     await this.loadLayout()
+    console.log('Cached layouts')
     await this.loadMeta()
+    console.log('Cached meta')
     await this.loadStats()
+    console.log('Cached stats')
     await this.loadMetrics()
+    console.log('Cached metrics')
     await this.loadHeatmap()
+    console.log('Cached heatmap')
+    await this.loadKeymap()
+    console.log('Cached keymap')
+  }
+
+  protected async loadKeymap() {
+    const data = await new CsvLoader('keymap.csv').load()
+    if (!data) return;
+    for await (const line of data) {
+      const [
+        key, ids
+      ] = line.split("¶");
+
+      if (!this.keymap.has(key)) {
+        this.keymap.set(key, [])
+      }
+      const ref = this.keymap.get(key)
+      for (const id of ids.split(',')) {
+        if (ref!.includes(id)) continue
+        ref!.push(id)
+      }
+    }
   }
 
   protected async loadHeatmap() {
     const data = await new CsvLoader('heatmap.csv').load()
     if (!data) return;
-    for (const line of data) {
+    for await (const line of data) {
       const [
         name, ...pairs
       ] = line.split("|");
@@ -51,7 +78,7 @@ class CminiStore {
   protected async loadMetrics() {
     const data = await new CsvLoader('metrics.csv').load()
     if (!data) return;
-    for (const line of data) {
+    for await (const line of data) {
       const [
         name,
         min,
@@ -68,7 +95,7 @@ class CminiStore {
   protected async loadMeta() {
     const data = await new CsvLoader('names.csv').load()
     if (!data) return;
-    for (const line of data) {
+    for await (const line of data) {
       const [
         name,
         layoutHash,
@@ -131,7 +158,7 @@ class CminiStore {
   protected async loadLayout() {
     const data = await new CsvLoader('layouts.csv').load()
     if (!data) return;
-    for (const line of data) {
+    for await (const line of data) {
       const [
         layoutHash,
         boardHash,
@@ -170,7 +197,7 @@ class CminiStore {
   protected async loadStats() {
     const data = await new CsvLoader('stats.csv').load()
     if (!data) return;
-    for (const line of data) {
+    for await (const line of data) {
       const [
         layoutHash,
         boardHash,
@@ -252,5 +279,4 @@ class CminiStore {
 
 const instance = new CminiStore();
 await instance.load();
-setInterval(instance.load.bind(instance), 60000)
 export default instance;

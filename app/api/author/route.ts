@@ -20,9 +20,9 @@ export async function GET(req) {
     const { name, id } = queryObj
     let rows: any;
     if (!!name) {
-        rows = CminiController.getLayoutsByAuthorName(name as string)
+        rows = CminiController.getBoardLayoutsByAuthorName(name as string)
     } else if (!!id) {
-        rows = CminiController.getLayoutsByAuthorId(id as string)
+        rows = CminiController.getBoardLayoutsByAuthorId(id as string)
     } else {
         return Response.json({
             success: false
